@@ -1,3 +1,9 @@
+1.5.0 2026-10-22
+  Handle missing and out-of-range data without stopping the engine.
+  Correct gas unit conversions and preserve legacy EPA table selection.
+  Add explicit EPA 2024 classes and the 2019 ozone NowCast model.
+  Correct extended-schema backfill and WeeWX 5 installation.
+
 0.1 2018-05-14
 * Initial version
 

@@ -1,12 +1,13 @@
 # weewx-aqi
 # Copyright 2018-2021 - Jonathan Koren <jonathan@jonathankoren.com>
+# Modified 2026-10-22: fix concentration conversion, missing data and explicit EPA revisions.
 # License: GPL 3
 
 from abc import ABCMeta, abstractmethod
 import operator
+import math
 import syslog
 
-from six import with_metaclass
 
 # number of seconds
 MINUTE = 60
@@ -80,17 +81,29 @@ def linear_interpolate(breakpoint, obs_mean):
     denominator = breakpoint['high_obs'] - breakpoint['low_obs']
     return int(round((numerator / float(denominator)) + breakpoint['low_aqi']))
 
+def epa_linear_interpolate(breakpoint, obs_mean):
+    """Interpolate an EPA AQI, rounding half values upward.
+
+    Args:
+        breakpoint (dict): Concentration and AQI bounds.
+        obs_mean (float): Truncated pollutant concentration.
+
+    Returns:
+        int: AQI rounded to the nearest integer.
+    """
+    value = ((obs_mean-breakpoint['low_obs'])*
+             (breakpoint['high_aqi']-breakpoint['low_aqi'])/
+             (breakpoint['high_obs']-breakpoint['low_obs'])+breakpoint['low_aqi'])
+    return int(math.floor(value+0.5))
+
 def arithmetic_mean(observations):
     '''Calculates the arithmetic mean from a set of observations.
     `observations` is reverse chronologically sorted array timestamped
     readings. Each reading is a pair, with epoch seconds first, followed by
     the measurment.'''
-    obs_mean = 0
-    for obs in observations:
-        obs_mean = obs_mean + obs[1]
-    return obs_mean / float(len(observations))
+    return math.fsum(obs[1] for obs in observations) / float(len(observations))
 
-class AqiCalculator(with_metaclass(ABCMeta)):
+class AqiCalculator(metaclass=ABCMeta):
     def __init__(self, **kwargs):
         '''Creates a new AqiCalculator. Takes the following keyword arguments:
             data_cleaner
@@ -119,24 +132,13 @@ class AqiCalculator(with_metaclass(ABCMeta)):
                 that must be present in order to calculate the AQI
                 DEFAULT: 0.75
         '''
-        # set defaults
-        params = {
-            'data_cleaner': IDENTITY,
-            'mean_cleaner': IDENTITY,
-            'mean_calculator': arithmetic_mean,
-            # unit (REQUIRED, so it's missing here)
-            # duration_in_secs (REQUIRED)
-            # obs_frequency_in_sec (REQUIRED)
-            'required_observation_ratio': 0.75,
-        }
-        params.update(kwargs)
-        self.data_cleaner = params['data_cleaner']
-        self.mean_cleaner = params['mean_cleaner']
-        self.mean_calculator = params['mean_calculator']
-        self.unit = params['unit']
-        self.obs_frequency_in_sec = params['obs_frequency_in_sec']
-        self.required_observation_ratio = params['required_observation_ratio']
-        self.duration_in_secs = params['duration_in_secs']
+        self.data_cleaner = kwargs.get('data_cleaner', IDENTITY)
+        self.mean_cleaner = kwargs.get('mean_cleaner', IDENTITY)
+        self.mean_calculator = kwargs.get('mean_calculator', arithmetic_mean)
+        self.unit = kwargs['unit']
+        self.obs_frequency_in_sec = kwargs['obs_frequency_in_sec']
+        self.required_observation_ratio = kwargs.get('required_observation_ratio', 0.75)
+        self.duration_in_secs = kwargs['duration_in_secs']
 
     def max_duration(self):
         '''Returns the maximum duration window for the calculator.'''
@@ -159,17 +161,16 @@ class AqiCalculator(with_metaclass(ABCMeta)):
         # clean the data
         observations = sorted(observations, key=operator.itemgetter('dateTime'), reverse=True)
 
-        j = 0
-        clean_observations = [None] * len(observations)
+        clean_observations = []
         for i in range(len(observations)):
-            if observations[i][pollutant] is None:
+            value = observations[i].get(pollutant)
+            if value is None or not math.isfinite(value) or value < 0:
                 continue
             try:
-                clean_observations[j] = (observations[i]['dateTime'], self.data_cleaner(observations[i][pollutant]))
-                j += 1
+                clean_observations.append((observations[i]['dateTime'], self.data_cleaner(observations[i][pollutant])))
             except TypeError as e:
                 syslog.syslog(syslog.LOG_WARNING, "%s at %d threw exception %s" % (pollutant, observations[i]['dateTime'], str(e)))
-        observations = clean_observations[:j]
+        observations = clean_observations
 
         # validate observations
         last_valid_index = get_last_valid_index(observations, self.duration_in_secs)
@@ -264,6 +265,7 @@ class BreakpointTable(AqiCalculator):
         params.update(kwargs)
 
         self.bp_index_offset = params['bp_index_offset']
+        self.extend_above = kwargs.get('extend_above', False)
         self.breakpoints = []
 
     def add_breakpoint(self, low_aqi, high_aqi, low_obs, high_obs, function=linear_interpolate):
@@ -283,13 +285,16 @@ class BreakpointTable(AqiCalculator):
             breakpoint = self.breakpoints[bp_index]
             if breakpoint['low_obs'] <= obs_mean and obs_mean <= breakpoint['high_obs']:
                 return (breakpoint['function'](breakpoint, obs_mean), bp_index + self.bp_index_offset)
+        if self.extend_above and self.breakpoints and obs_mean > self.breakpoints[-1]['high_obs']:
+            breakpoint = self.breakpoints[-1]
+            return (breakpoint['function'](breakpoint, obs_mean), len(self.breakpoints) - 1 + self.bp_index_offset)
         raise IndexError('AQI can not be calculated from this table')
 
 class ArithmeticMean(AqiCalculator):
     '''Simply calculates the arithmetic mean of a set of observations.'''
     def __init__(self, **kwargs):
         kwargs['mean_calculator'] = arithmetic_mean
-        super(ArithmeticMean, self).__init__(kwargs)
+        super(ArithmeticMean, self).__init__(**kwargs)
 
     def _calculate_index_from_mean(self, obs_mean):
         return (obs_mean, None)

@@ -1,5 +1,6 @@
 # weewx-aqi
 # Copyright 2018-2021 - Jonathan Koren <jonathan@jonathankoren.com>
+# Modified 2026-10-22: repair syntax while retaining the original numerical tables.
 # License: GPL 3
 
 import operator
@@ -72,6 +73,7 @@ class NationalAirQualityIndex(standards.AqiStandards):
             .add_breakpoint(301, 400, 281, 400) \
             .add_breakpoint(401, 500, 401, 520)      # Excel calculator range
 
+        # Original source marks the 301-400 lower bound as undefined and speculative.
         self.calculators[calculators.O3] = calculators.CalculatorCollection()
         self.calculators[calculators.O3].add_calculator(calculators.BreakpointTable(
             data_cleaner=calculators.ROUND_TO_0,
@@ -83,7 +85,7 @@ class NationalAirQualityIndex(standards.AqiStandards):
             .add_breakpoint(  0,  50,   0,  50) \
             .add_breakpoint( 51, 100,  51, 100) \
             .add_breakpoint(101, 200, 101, 168) \
-            .add_breakpoint(201, 300, 169, 208)
+            .add_breakpoint(201, 300, 169, 208))
         self.calculators[calculators.O3].add_calculator(calculators.BreakpointTable(
             data_cleaner=calculators.ROUND_TO_0,
             mean_cleaner=calculators.ROUND_TO_0,
@@ -91,8 +93,8 @@ class NationalAirQualityIndex(standards.AqiStandards):
             duration_in_secs=1 * calculators.HOUR,
             obs_frequency_in_sec=obs_frequency_in_sec,
             bp_index_offset=4) \
-            .add_breakpoint(301, 400, 209,  748) \     # lower bound not defined(!) Pure speculation.
-            .add_breakpoint(401, 500, 749, 1288)       # upper bound not defined(!) Pure speculation.
+            .add_breakpoint(301, 400, 209,  748) \
+            .add_breakpoint(401, 500, 749, 1288))       # upper bound not defined(!) Pure speculation.
 
         self.calculators[calculators.CO] = calculators.BreakpointTable(
             data_cleaner=calculators.ROUND_TO_1,

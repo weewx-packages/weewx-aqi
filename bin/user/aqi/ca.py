@@ -1,5 +1,6 @@
 # weewx-aqi
 # Copyright 2018-2021 - Jonathan Koren <jonathan@jonathankoren.com>
+# Modified 2026-10-22: fix concentration conversion, missing data and explicit EPA revisions.
 # License: GPL 3
 
 from . import calculators
@@ -55,8 +56,6 @@ class AirQualityHealthIndex(standards.AqiStandards):
     def calculate_composite_aqi(self, pollutants_and_units, observations):
         '''Calcuations are based on the 3 hour average of O3 (ppb), NO2 (ppb), and PM2.5 (ug/m^3).
         Throws ValueError, if readings from all three pollutants are not available.'''
-        observations = observations[:get_last_valid_index(self, observations, 3 * calculators.HOUR) + 1]
-        validate_number_of_observations(observations, self.duration_in_secs, obs_frequency_in_sec, 0.67)
 
         # calculate features
         try:

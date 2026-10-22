@@ -1,10 +1,10 @@
 # weewx-aqi
 # Copyright 2018-2021 - Jonathan Koren <jonathan@jonathankoren.com>
+# Modified 2026-10-22: use Python 3 ABCs and distinct EPA revision identifiers.
 # License: GPL 3
 
 from abc import ABCMeta, abstractmethod
 
-from six import with_metaclass
 
 from . import calculators
 
@@ -18,8 +18,11 @@ EU_EAQI_GUID = 7
 EU_CAQI_H_GUID = 8
 AU_AQI_GUID = 9
 AU_IWRPI_GUID = 10
+US_AQI_2024_GUID = 11
+US_NOWCAST_2024_GUID = 12
+US_NOWCAST_2019_GUID = 13
 
-class AqiStandards(with_metaclass(ABCMeta)):
+class AqiStandards(metaclass=ABCMeta):
     def __init__(self, colors, categories, guid):
         '''Creates an AqiStandard with the specified color and categorical scales.
         self.calculators is initalized to an empty dictionary. It is up to

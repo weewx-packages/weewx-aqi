@@ -1,5 +1,6 @@
 # weewx-aqi
 # Copyright 2018-2021 - Jonathan Koren <jonathan@jonathankoren.com>
+# Modified 2026-10-22: fix concentration conversion, missing data and explicit EPA revisions.
 # License: GPL 3
 
 import operator
@@ -172,38 +173,29 @@ class AirQualityIndex(standards.AqiStandards):
         try:
             aqi_value = calculator.calculate(pollutant, observation_unit, observations)
             return aqi_value
-        except IndexError as e:
-            if pollutant == calculators.SO2:
-                # check if we fell in the hole between the tables.
-                calculator = self.calculators[pollutant]
-
-                observations = sorted(observations, key=operator.itemgetter(0), reverse=True)
-                for i in range(len(observations)):
-                    observations[i] = (observations[i][0], calculator.data_cleaner(observations[i][pollutant]))
-
-                last_valid_hour_index = calculator.breakpoint_tables[0].get_last_valid_index(observations, calculator.breakpoint_tables[0].duration_in_secs)
-                hour_ave = 0
-                for i in range(0, last_valid_hour_index + 1):
-                    hour_ave = hour_ave + observations[i][pollutant]
-                hour_ave = hour_ave / float(last_valid_hour_index + 1)
-
-                last_valid_day_index = calculator.breakpoint_tables[1].get_last_valid_index(observations, calculator.breakpoint_tables[1].duration_in_secs)
-                day_ave = 0
-                for i in range(0, last_valid_day_index + 1):
-                    day_ave = day_ave + observations[i][pollutant]
-                day_ave = day_ave / float(last_valid_day_index + 1)
-
-                if hour_ave >= 305 and day_ave < 305:
-                    return (200, 3)
-                else:
-                    raise e
-            else:
-                raise e
+        except (IndexError, ValueError) as error:
+            if pollutant != calculators.SO2 or observation_unit != calculator.unit:
+                raise
+            means = []
+            for table in calculator.calculators:
+                mean = calculators.ArithmeticMean(unit=table.unit,
+                    duration_in_secs=table.duration_in_secs,
+                    obs_frequency_in_sec=table.obs_frequency_in_sec,
+                    data_cleaner=table.data_cleaner,
+                    required_observation_ratio=table.required_observation_ratio)
+                try:
+                    means.append(mean.calculate(pollutant, observation_unit, observations)[0])
+                except ValueError:
+                    raise error
+            # EPA's special case when the 1-hour value is high but 24-hour is low.
+            if means[0] >= 305 and means[1] < 305:
+                return (200, 3)
+            raise error
 
 def nowcast_pm_mean(observations, obs_frequency_in_sec, required_observation_ratio, min_hours):
     '''Calculates the NowCast weighted mean for a set of observations. Each
     hourly average requires at least required_observation_ratio of the possible readings. '''
-    hourly_means = [0.0] * 12
+    hourly_sums = [0.0] * 12
     hourly_samples = [0.0] * 12
 
     # calculate hourly means
@@ -211,21 +203,17 @@ def nowcast_pm_mean(observations, obs_frequency_in_sec, required_observation_rat
     for obs in observations:
         index = int((start_time - obs[0]) / calculators.HOUR)
         hourly_samples[index] = hourly_samples[index] + 1
-        hourly_means[index] = hourly_means[index] + obs[1]
+        hourly_sums[index] = hourly_sums[index] + obs[1]
 
     # validate the samples, and calculate the data range
-    max_obs = None
-    min_obs = None
-    for i in range(len(hourly_means)):
-        if hourly_samples[i] >= (calculators.HOUR / obs_frequency_in_sec) * required_observation_ratio:
-            if hourly_means[i] is not None:
-                hourly_means[i] = calculators.TRUNCATE_TO_1(hourly_means[i] / float(hourly_samples[i]))
-            if (max_obs is None) or (hourly_means[i] > max_obs):
-                max_obs = hourly_means[i]
-            if (min_obs is None) or (hourly_means[i] < min_obs):
-                min_obs = hourly_means[i]
-        else:
-            hourly_means[i] = None
+    required = (calculators.HOUR / obs_frequency_in_sec) * required_observation_ratio
+    hourly_means = [calculators.TRUNCATE_TO_1(total / count) if count >= required else None
+                    for total, count in zip(hourly_sums, hourly_samples)]
+    valid_means = [value for value in hourly_means if value is not None]
+    if not valid_means:
+        raise ValueError('NowCast has no valid hourly means')
+    max_obs = max(valid_means)
+    min_obs = min(valid_means)
 
     # check if we have enough recent data
     missing = 0
@@ -243,15 +231,14 @@ def nowcast_pm_mean(observations, obs_frequency_in_sec, required_observation_rat
         weight_factor = 0.5
 
     # calcualte the weighted average
-    numerator = 0
-    denominator = 0
-    for i in range(len(hourly_means)):
-        if hourly_means[i] is None:
+    numerator = 0.0
+    denominator = 0.0
+    for i, value in enumerate(hourly_means):
+        if value is None:
             continue
         sample_weight = weight_factor ** i
-        if hourly_means[i] is not None:
-            numerator = numerator + (hourly_means[i] * sample_weight)
-            denominator = denominator + sample_weight
+        numerator = numerator + (value * sample_weight)
+        denominator = denominator + sample_weight
     return numerator / float(denominator)
 
 
@@ -332,3 +319,104 @@ class NowCast(standards.AqiStandards):
             .add_breakpoint(151, 200, 165, 204) \
             .add_breakpoint(201, 300, 205, 404) \
             .add_breakpoint(301, 500, 405, 604))
+
+
+class AirQualityIndex2024(AirQualityIndex):
+    """Use EPA's May 2024 PM2.5 breakpoints and hazardous extrapolation.
+
+    Legacy AirQualityIndex remains available for historical comparisons.
+    """
+    def __init__(self, obs_frequency_in_sec):
+        super(AirQualityIndex2024, self).__init__(obs_frequency_in_sec)
+        self.guid = standards.US_AQI_2024_GUID
+        self.calculators[calculators.PM2_5] = _pm25_2024_table(obs_frequency_in_sec)
+        for calculator in self.calculators.values():
+            tables = calculator.calculators if isinstance(calculator, calculators.CalculatorCollection) else [calculator]
+            for table in tables:
+                # Ozone's 8-hour table ends at AQI 300, not a hazardous interval.
+                table.extend_above = table.breakpoints[-1]['high_aqi'] == 500
+                for breakpoint in table.breakpoints:
+                    breakpoint['function'] = calculators.epa_linear_interpolate
+
+
+class NowCast2024(NowCast):
+    """Use 2024 PM2.5 breakpoints and EPA particulate completeness rules.
+
+    Ozone retains the explicitly documented legacy method.
+    """
+    def __init__(self, obs_frequency_in_sec):
+        super(NowCast2024, self).__init__(obs_frequency_in_sec)
+        self.guid = standards.US_NOWCAST_2024_GUID
+        table = _pm25_2024_table(obs_frequency_in_sec)
+        table.duration_in_secs = 12 * calculators.HOUR
+        table.mean_calculator = lambda obs: nowcast_pm_mean(obs, obs_frequency_in_sec, 0.75, 3)
+        self.calculators[calculators.PM2_5] = ParticulateNowCast(table, obs_frequency_in_sec)
+        self.calculators[calculators.PM10_0].extend_above = True
+        for breakpoint in self.calculators[calculators.PM10_0].breakpoints:
+            breakpoint['function'] = calculators.epa_linear_interpolate
+        self.calculators[calculators.PM10_0] = ParticulateNowCast(
+            self.calculators[calculators.PM10_0], obs_frequency_in_sec)
+
+
+def _pm25_2024_table(obs_frequency_in_sec):
+    """Create the PM2.5 table in 40 CFR 58 Appendix G, Table 2.
+
+    Args:
+        obs_frequency_in_sec (int): Seconds between archived sensor observations.
+
+    Returns:
+        calculators.BreakpointTable: May 2024 PM2.5 thresholds with extrapolation.
+    """
+    table = calculators.BreakpointTable(
+        data_cleaner=calculators.IDENTITY, mean_cleaner=calculators.TRUNCATE_TO_1,
+        unit='microgram_per_meter_cubed', duration_in_secs=24 * calculators.HOUR,
+        obs_frequency_in_sec=obs_frequency_in_sec, extend_above=True)
+    for low_aqi, high_aqi, low, high in [
+        (0, 50, 0.0, 9.0), (51, 100, 9.1, 35.4), (101, 150, 35.5, 55.4),
+        (151, 200, 55.5, 125.4), (201, 300, 125.5, 225.4), (301, 500, 225.5, 325.4)]:
+        table.add_breakpoint(low_aqi, high_aqi, low, high, calculators.epa_linear_interpolate)
+    return table
+
+
+class ParticulateNowCast(calculators.AqiCalculator):
+    """Apply the EPA two-of-three-hour rule before mapping the weighted mean."""
+
+    def __init__(self, table, obs_frequency_in_sec):
+        super(ParticulateNowCast, self).__init__(unit=table.unit,
+            duration_in_secs=12*calculators.HOUR, obs_frequency_in_sec=obs_frequency_in_sec)
+        self.table = table
+
+    def calculate(self, pollutant, observation_unit, observations):
+        import math
+        if observation_unit != self.unit or not observations:
+            raise ValueError('NowCast needs observations in %s' % self.unit)
+        latest_hour = (max(row['dateTime'] for row in observations)-1)//calculators.HOUR
+        hours = [[] for i in range(12)]
+        for row in observations:
+            offset = latest_hour-(row['dateTime']-1)//calculators.HOUR
+            value = row.get(pollutant)
+            if 0 <= offset < 12 and value is not None and math.isfinite(value) and value >= 0:
+                hours[offset].append(value)
+        needed = calculators.HOUR/self.obs_frequency_in_sec*0.75
+        means = [math.fsum(hour)/len(hour) if len(hour) >= needed else None for hour in hours]
+        if sum(value is not None for value in means[:3]) < 2:
+            raise ValueError('NowCast needs two valid hours among the latest three')
+        available = [value for value in means if value is not None]
+        maximum = max(available)
+        weight = max(0.5, min(available)/maximum) if maximum > 0 else 1.0
+        numerator = math.fsum(value*weight**i for i,value in enumerate(means) if value is not None)
+        denominator = math.fsum(weight**i for i,value in enumerate(means) if value is not None)
+        return self.table._calculate_index_from_mean(self.table.mean_cleaner(numerator/denominator))
+
+    def _calculate_index_from_mean(self, mean):
+        return self.table._calculate_index_from_mean(mean)
+
+
+class NowCast2019(NowCast2024):
+    """Combine EPA 2019 ozone prediction with 2024 particulate breakpoints."""
+
+    def __init__(self, obs_frequency_in_sec):
+        super(NowCast2019, self).__init__(obs_frequency_in_sec)
+        from .ozone import OzoneNowCast2019
+        self.calculators[calculators.O3] = OzoneNowCast2019(obs_frequency_in_sec)
+        self.guid = standards.US_NOWCAST_2019_GUID

@@ -1,8 +1,9 @@
+# Modified 2026-10-22: WeeWX 5 installer and selectable EPA revisions.
 # weewx-aqi
 # Copyright 2018 - Jonathan Koren <jonathan@jonathankoren.com>
 # License: GPL 3
 
-from setup import ExtensionInstaller
+from weecfg.extension import ExtensionInstaller
 
 def loader():
     return AirQualityIndexInstaller()
@@ -10,7 +11,7 @@ def loader():
 class AirQualityIndexInstaller(ExtensionInstaller):
     def __init__(self):
         super(AirQualityIndexInstaller, self).__init__(
-            version="1.4",
+            version="1.5.0",
             name='aqi',
             description='Calculates air quality indexes.',
             author="Jonathan Koren",
@@ -55,7 +56,8 @@ class AirQualityIndexInstaller(ExtensionInstaller):
                     'bin/user/aqi/standards.py',
                     'bin/user/aqi/uk.py',
                     'bin/user/aqi/units.py',
-                    'bin/user/aqi/us.py' ]),
+                    'bin/user/aqi/us.py',
+                    'bin/user/aqi/ozone.py' ]),
                 ('bin',
                     [ 'bin/aqi_backfill' ])
             ]

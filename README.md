@@ -27,7 +27,7 @@ A source for air quality data, such as
 ## Installation
 1) run the installer (from the git directory):
 
-    wee_extension --install .
+    weectl extension install .
 
 2) restart weewx:
 
@@ -164,3 +164,123 @@ the current `weewx.conf`.
 cd weewx-aqi
 python3 -m unittest
 ```
+
+## Independent continuation
+
+This repository continues [jonathankoren/weewx-aqi](https://github.com/jonathankoren/weewx-aqi)
+from d5bf9c9f28e8da15e3a65c55bc623e56a42e3602. It retains the complete upstream
+history, copyright and GPLv3 license and is maintained separately.
+
+Version 1.5.0 is tested with WeeWX 5.5.2 on Python 3.10 and 3.14. Install with
+`weectl extension install weewx-aqi-1.5.0.zip`. The default PurpleAir mapping
+and existing standard names remain available. The Python 2 compatibility
+package `six` is no longer required.
+
+### Choose the EPA revision
+
+The `standard` option in `[AqiService][[standard]]` selects the calculation:
+
+| Class in `user.aqi.us` | PM2.5 table | Ozone method | Stored standard ID |
+| --- | --- | --- | --- |
+| `AirQualityIndex` | Original table | Original trailing means | 5 |
+| `NowCast` | Original table | Original legacy method | 6 |
+| `AirQualityIndex2024` | May 2024 | Original trailing means | 11 |
+| `NowCast2024` | May 2024 | Original legacy method | 12 |
+| `NowCast2019` | May 2024 | EPA 2019 model, including reference updates through 2021 | 13 |
+
+The new modes use all six PM2.5 intervals from
+[40 CFR Part 58 Appendix G, Table 2, 2024 edition](https://www.govinfo.gov/content/pkg/CFR-2024-title40-vol6/pdf/CFR-2024-title40-vol6-part58-appG.pdf).
+The changes include the upper intervals. They use the 301–500 slope to
+extrapolate numeric hazardous values above 500, as specified in the table's
+footnote. New EPA modes round half values upward. The old class names retain
+their tables and original integer-rounding behavior.
+
+Existing stored rows are not recalculated on upgrade. For historical comparisons,
+keep each revision in a separate AQI binding/database. Conversion corrections,
+zero-temperature handling and accurate floating-point summation can change newly
+calculated values that previously encountered those bugs, including legacy modes.
+The old gas conversion multiplied ppb into ppm and divided ppm into ppb; the
+correct relationship is one ppm equals 1000 ppb. Singular, plural and modern
+WeeWX `ppm`/`ppb` unit names are accepted. Column names and database types remain
+unchanged.
+
+The new particulate NowCast accepts two valid hours among the latest three;
+it does not require a twelve-hour warmup. An hour needs 75 percent of its
+expected archive samples. Missing or rejected samples stay missing, and the
+weighted mean uses the actual hour positions. The calculation follows the
+[AirNow technical assistance document, section IV](https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf).
+
+For `NowCast2019`, install NumPy in the same environment as WeeWX:
+
+```sh
+python -m pip install numpy
+```
+
+The ozone model uses a 336-hour history and the EPA decision tree, including
+surrogate, zero and missing-hour cases. Two extra hours allow it to reconstruct
+an earlier-hour result after a restart. A rank-deficient model produces a
+missing result. The full-component model uses centered least squares when its
+predictor matrix has full rank. Tests compare its concentrations with the
+actually executed [EPA R reference](https://github.com/USEPA/O3-Nowcast), including
+the EPA example dataset, to an absolute tolerance of 1e-8 ppb. Fixture provenance
+and source hashes are in `tests/fixtures/epa_ozone_reference.json`.
+
+### Read PM from the main archive or Davis AirLink
+
+The AirLink extension supplies `pm2_5` and `pm10_0`. Once those fields are stored
+in your weather archive, this configuration also works for custom PM sensors:
+
+```ini
+[AqiService]
+    [[standard]]
+        data_binding = aqi_binding
+        standard = user.aqi.us.NowCast2024
+    [[air_sensor]]
+        data_binding = wx_binding
+        dateTime = dateTime
+        usUnits = usUnits
+        pm2_5 = pm2_5
+        pm10_0 = pm10_0
+```
+
+`usUnits = usUnits` names the database column holding each row's WeeWX unit-system
+code. It does not select US units for the sensor. Set `[standard] obs_frequency_in_sec` to
+the actual spacing of the stored sensor records if it differs from the default
+`[StdArchive] archive_interval`. Temperature and pressure are
+unnecessary when the pollutant already has the required concentration units.
+For gas/mass conversion, configure both sensor temperature and station pressure,
+for example `temp = extraTemp1` and `pressure = pressure`. Zero Celsius is valid.
+Missing conversion context leaves that pollutant missing. Humidity is not used.
+
+Keep SQL NULL values for unavailable readings. The calculators ignore them
+subject to their completeness rules. Out-of-table values in legacy modes produce
+NULL AQI/category fields and a log message instead of terminating WeeWX.
+No synthetic maximum or replacement sensor value is stored.
+
+The Canadian `user.aqi.ca.AirQualityHealthIndex` needs O3, NO2 and PM2.5 together;
+its three-hour calculators and composite constructor now work. It does not
+provide individual-pollutant AQHI values. Sensor wiring, AirLink device access
+and live data are outside these local fixture tests.
+
+### Backfill an extended archive
+
+`aqi_backfill` now reads the archive's named timestamp/interval columns and uses
+the configured table and bindings. It does not start the station driver. This
+avoids assigning extended or reordered columns using a fixed standard schema.
+It writes using the selected standard, so choose the destination binding before
+running it. The start timestamp is included; the end timestamp is excluded.
+
+### Tests
+
+Run `python -m pytest -q tests` with WeeWX, NumPy and pytest installed. Tests
+cover the actual service and SQLite databases, custom temperature columns,
+missing readings, 2024 boundaries, gas conversions, NowCast completeness,
+Canadian composite construction, and the separately executed EPA ozone reference.
+
+
+The previously unimportable Australian module also has its indentation,
+interim constructor name and missing category bands repaired. The six bands
+follow the [Australian government report, table 8](https://soe.dcceew.gov.au/sites/default/files/2022-07/soe2021-air-quality.pdf).
+The interim particulate thresholds retain the original 80.1 and 62.1 values,
+which are documented in the [NSW air-quality glossary](https://www.environment.nsw.gov.au/topics/air/understanding-air-quality-data/glossary-of-air-quality-terms).
+These are the historical methods represented by the existing class names.

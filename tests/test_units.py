@@ -1,3 +1,4 @@
+# Modified 2026-10-22: ppm inputs are one thousandth of the corresponding ppb.
 import unittest
 
 from bin.user.aqi.calculators import *
@@ -70,8 +71,8 @@ class TestUnits(unittest.TestCase):
             actual = convert_pollutant_units(tc['pollutant'], tc['ppb'], 'part_per_billion', 'microgram_per_meter_cubed', tc['temp_in_k'], tc['pres_in_kpa'])
             self.assertAlmostEqual(actual, tc['ugm3'], num_decimals(tc['ugm3']))
 
-            actual = convert_pollutant_units(tc['pollutant'], tc['ppb'] * 1000, 'part_per_million', 'microgram_per_meter_cubed', tc['temp_in_k'], tc['pres_in_kpa'])
+            actual = convert_pollutant_units(tc['pollutant'], tc['ppb'] / 1000.0, 'part_per_million', 'microgram_per_meter_cubed', tc['temp_in_k'], tc['pres_in_kpa'])
             self.assertAlmostEqual(actual, tc['ugm3'], num_decimals(tc['ugm3']))
 
-            actual = convert_pollutant_units(tc['pollutant'], tc['ppb'] * 1000, 'part_per_million', 'milligram_per_meter_cubed', tc['temp_in_k'], tc['pres_in_kpa'])
+            actual = convert_pollutant_units(tc['pollutant'], tc['ppb'] / 1000.0, 'part_per_million', 'milligram_per_meter_cubed', tc['temp_in_k'], tc['pres_in_kpa'])
             self.assertAlmostEqual(actual, tc['ugm3'] / 1000.0, num_decimals(tc['ugm3']))

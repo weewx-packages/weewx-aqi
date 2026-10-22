@@ -1,5 +1,6 @@
 # weewx-aqi
 # Copyright 2018-2021 - Jonathan Koren <jonathan@jonathankoren.com>
+# Modified 2026-10-22: repair import indentation, constructor name and missing scale bands.
 # License: GPL 3
 
 import operator
@@ -23,67 +24,67 @@ class AirQualityIndex(standards.AqiStandards):
             [TEAL, GREEN, YELLOW, ORANGE, PURPLE, RED],
             ['Very Good', 'Good', 'Fair', 'Poor', 'Very Poor', 'Hazardous'],
             standards.AU_AQI_GUID)
-            self.calculators[calculators.CO] = calculators.LinearScale(
-                unit='parts_per_million',
-                duration_in_secs=8 * calculators.HOUR,
-                obs_frequency_in_sec=obs_frequency_in_sec,
-                data_cleaner=calculators.ROUND_TO_1,
-                high_obs=9.0,
-                breakpoints=[0, 34, 100, 150, 200])
+        self.calculators[calculators.CO] = calculators.LinearScale(
+            unit='parts_per_million',
+            duration_in_secs=8 * calculators.HOUR,
+            obs_frequency_in_sec=obs_frequency_in_sec,
+            data_cleaner=calculators.ROUND_TO_1,
+            high_obs=9.0,
+            breakpoints=[0, 34, 67, 100, 150, 200])
 
-            self.calculators[calculators.NO2] = calculators.LinearScale(
-                unit='parts_per_million',
-                duration_in_secs=1 * calculators.HOUR,
-                obs_frequency_in_sec=obs_frequency_in_sec,
-                data_cleaner=calculators.ROUND_TO_2,
-                high_obs=0.12,
-                breakpoints=[0, 34, 100, 150, 200])
+        self.calculators[calculators.NO2] = calculators.LinearScale(
+            unit='parts_per_million',
+            duration_in_secs=1 * calculators.HOUR,
+            obs_frequency_in_sec=obs_frequency_in_sec,
+            data_cleaner=calculators.ROUND_TO_2,
+            high_obs=0.12,
+            breakpoints=[0, 34, 67, 100, 150, 200])
 
-            # Australia's NEPM also defines O3 as 4 hours mean at 0.08 ppm
-            # I can't find how these are supposed to be combined, so I'm
-            # assuming that Australia is doing something like the United States
-            # where you calculate both and then take the maximum value.
-            self.calculators[calculators.O3] = calculators.CalculatorCollection()
-            self.calculators[calculators.O3].add_calculator(
-                calculators.LinearScale(
-                    unit='parts_per_million',
-                    duration_in_secs=1 * calculators.HOUR,
-                    obs_frequency_in_sec=obs_frequency_in_sec,
-                    data_cleaner=calculators.ROUND_TO_2,
-                    high_obs=0.10,
-                    breakpoints=[0, 34, 100, 150, 200]))
-            self.calculators[calculators.O3].add_calculator(
-                calculators.LinearScale(
-                    unit='parts_per_million',
-                    duration_in_secs=4 * calculators.HOUR,
-                    obs_frequency_in_sec=obs_frequency_in_sec,
-                    data_cleaner=calculators.ROUND_TO_2,
-                    high_obs=0.08,
-                    breakpoints=[0, 34, 100, 150, 200]))
-
-            self.calculators[calculators.SO2] = calculators.LinearScale(
+        # Australia's NEPM also defines O3 as 4 hours mean at 0.08 ppm
+        # I can't find how these are supposed to be combined, so I'm
+        # assuming that Australia is doing something like the United States
+        # where you calculate both and then take the maximum value.
+        self.calculators[calculators.O3] = calculators.CalculatorCollection()
+        self.calculators[calculators.O3].add_calculator(
+            calculators.LinearScale(
                 unit='parts_per_million',
                 duration_in_secs=1 * calculators.HOUR,
                 obs_frequency_in_sec=obs_frequency_in_sec,
                 data_cleaner=calculators.ROUND_TO_2,
-                high_obs=0.20,
-                breakpoints=[0, 34, 100, 150, 200])
-
-            self.calculators[calculators.PM10_0] = calculators.LinearScale(
-                unit='microgram_per_meter_cubed',
-                duration_in_secs=24 * calculators.HOUR,
+                high_obs=0.10,
+                breakpoints=[0, 34, 67, 100, 150, 200]))
+        self.calculators[calculators.O3].add_calculator(
+            calculators.LinearScale(
+                unit='parts_per_million',
+                duration_in_secs=4 * calculators.HOUR,
                 obs_frequency_in_sec=obs_frequency_in_sec,
                 data_cleaner=calculators.ROUND_TO_2,
-                high_obs=50,
-                breakpoints=[0, 34, 100, 150, 200])
+                high_obs=0.08,
+                breakpoints=[0, 34, 67, 100, 150, 200]))
 
-            self.calculators[calculators.PM2_5] = calculators.LinearScale(
-                unit='microgram_per_meter_cubed',
-                duration_in_secs=24 * calculators.HOUR,
-                obs_frequency_in_sec=obs_frequency_in_sec,
-                data_cleaner=calculators.ROUND_TO_2,
-                high_obs=25,
-                breakpoints=[0, 34, 100, 150, 200])
+        self.calculators[calculators.SO2] = calculators.LinearScale(
+            unit='parts_per_million',
+            duration_in_secs=1 * calculators.HOUR,
+            obs_frequency_in_sec=obs_frequency_in_sec,
+            data_cleaner=calculators.ROUND_TO_2,
+            high_obs=0.20,
+            breakpoints=[0, 34, 67, 100, 150, 200])
+
+        self.calculators[calculators.PM10_0] = calculators.LinearScale(
+            unit='microgram_per_meter_cubed',
+            duration_in_secs=24 * calculators.HOUR,
+            obs_frequency_in_sec=obs_frequency_in_sec,
+            data_cleaner=calculators.ROUND_TO_2,
+            high_obs=50,
+            breakpoints=[0, 34, 67, 100, 150, 200])
+
+        self.calculators[calculators.PM2_5] = calculators.LinearScale(
+            unit='microgram_per_meter_cubed',
+            duration_in_secs=24 * calculators.HOUR,
+            obs_frequency_in_sec=obs_frequency_in_sec,
+            data_cleaner=calculators.ROUND_TO_2,
+            high_obs=25,
+            breakpoints=[0, 34, 67, 100, 150, 200])
 
 
 class InterimWebReportingParticulateIndex(standards.AqiStandards):
@@ -96,20 +97,22 @@ class InterimWebReportingParticulateIndex(standards.AqiStandards):
     https://www.environment.nsw.gov.au/topics/air/understanding-air-quality-data/air-quality-categories/history-of-air-quality-reporting/about-the-air-quality-index
     '''
     def __init__(self, obs_frequency_in_sec):
-        super(IntermWebReportingParticulateIndex, self).__init__(
+        super(InterimWebReportingParticulateIndex, self).__init__(
             [TEAL, GREEN, YELLOW, ORANGE, PURPLE, RED],
             ['Very Good', 'Good', 'Fair', 'Poor', 'Very Poor', 'Hazardous'],
             standards.AU_IWRPI_GUID)
-            self.calculators[calculators.PM10_0] = calculators.LinearScale(
-                unit='microgram_per_meter_cubed',
-                duration_in_secs=1 * calculators.HOUR,
-                obs_frequency_in_sec=obs_frequency_in_sec,
-                data_cleaner=calculators.ROUND_TO_1,
-                high_obs=80.1)
+        self.calculators[calculators.PM10_0] = calculators.LinearScale(
+            unit='microgram_per_meter_cubed',
+            duration_in_secs=1 * calculators.HOUR,
+            obs_frequency_in_sec=obs_frequency_in_sec,
+            data_cleaner=calculators.ROUND_TO_1,
+            high_obs=80.1,
+            breakpoints=[0, 34, 67, 100, 150, 200])
 
-            self.calculators[calculators.PM2_5] = calculators.LinearScale(
-                unit='microgram_per_meter_cubed',
-                duration_in_secs=1 * calculators.HOUR,
-                obs_frequency_in_sec=obs_frequency_in_sec,
-                data_cleaner=calculators.ROUND_TO_1,
-                high_obs=62.1)
+        self.calculators[calculators.PM2_5] = calculators.LinearScale(
+            unit='microgram_per_meter_cubed',
+            duration_in_secs=1 * calculators.HOUR,
+            obs_frequency_in_sec=obs_frequency_in_sec,
+            data_cleaner=calculators.ROUND_TO_1,
+            high_obs=62.1,
+            breakpoints=[0, 34, 67, 100, 150, 200])
