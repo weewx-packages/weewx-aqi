@@ -31,6 +31,22 @@ A source for air quality data, such as
 
 ## Installation
 
+For a pip installation, activate the existing virtual environment that runs
+your WeeWX service before running these commands. Both `python` and `weectl`
+must come from that environment. For a distribution package installation, use
+its `weectl`, with `sudo` if required. Add `--config /path/to/weewx.conf` to the
+extension command when your station configuration is not found automatically.
+
+For Debian or Raspberry Pi OS package installations, use
+`sudo apt install python3-numpy` when selecting `NowCast2019`. Its version must
+satisfy `numpy>=2.2,<3`. If your distribution does not supply that version, use
+a WeeWX virtual environment. The pip command below is for that environment.
+
+Use a NumPy wheel matching your Python and platform. A NumPy source build
+requires C/C++ compilers, Python headers, BLAS/LAPACK development libraries and
+`pkg-config`;
+see the [NumPy build prerequisites](https://numpy.org/doc/stable/building/).
+
 Use an existing pollutant data source and its archive binding. Install NumPy
 in the WeeWX environment if you select the `NowCast2019` ozone model:
 
@@ -44,12 +60,9 @@ Install the published archive with WeeWX 5's extension installer:
 weectl extension install https://github.com/weewx-packages/catalog/releases/download/aqi/v1.5.0.post20261022/aqi-1.5.0.post20261022.tar.gz
 ```
 
-Use the `weectl` from your WeeWX environment. Add
-`--config /path/to/weewx.conf` when the station configuration is not found
-automatically. Package installations may require `sudo`; activate the WeeWX
-virtual environment for pip installations. Restart your WeeWX service after
-configuration, for example `sudo systemctl restart weewx` on systemd.
-The installer does not restart it for you.
+Restart your WeeWX service after configuration, for example
+`sudo systemctl restart weewx` on systemd. The installer does not restart it
+for you.
 
 The installer registers `user.aqi.service.AqiService` in `process_services`,
 installs the `user.aqi` package, and adds `aqi_binding` with its own `aqi.sdb`
@@ -192,10 +205,16 @@ while backfilling. The source launcher `bin/aqi_backfill` is retained in the
 archive but is not installed as a top-level command.
 
 
-## Development Testing
-```
+## Development testing
+
+Install the NumPy dependency from [Installation](#installation) before testing.
+With Git installed and that WeeWX virtual environment active, download the
+source into an empty working directory:
+
+```sh
+git clone --depth 1 https://github.com/weewx-packages/weewx-aqi.git
 cd weewx-aqi
-python3 -m unittest
+python -m unittest
 ```
 
 ## Independent continuation
@@ -243,11 +262,8 @@ expected archive samples. Missing or rejected samples stay missing, and the
 weighted mean uses the actual hour positions. The calculation follows the
 [AirNow technical assistance document, section IV](https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf).
 
-For `NowCast2019`, install NumPy in the same environment as WeeWX:
-
-```sh
-python -m pip install numpy
-```
+For `NowCast2019`, install NumPy using the environment-specific instructions
+under [Installation](#installation).
 
 The ozone model uses a 336-hour history and the EPA decision tree, including
 surrogate, zero and missing-hour cases. Two extra hours allow it to reconstruct
