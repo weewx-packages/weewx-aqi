@@ -8,3 +8,5 @@ Use local fixtures for device, network and filesystem tests.
 Run `python -m pytest -q tests` with WeeWX, NumPy and pytest installed.
 Keep the EPA revision classes and stored standard IDs distinct. The ozone
 reference fixture records the separately executed primary R implementation.
+README follows the weewx-packages schema and names no versions or archive URLs;
+installation links to the catalog page.
