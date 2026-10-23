@@ -1,3 +1,5 @@
+# Modified 2026-10-23 by weewx-packages: install the backfill tool as
+# user.aqi.backfill inside bin/user.
 # Modified 2026-10-22: WeeWX 5 installer and selectable EPA revisions.
 # weewx-aqi
 # Copyright 2018 - Jonathan Koren <jonathan@jonathankoren.com>
@@ -57,8 +59,7 @@ class AirQualityIndexInstaller(ExtensionInstaller):
                     'bin/user/aqi/uk.py',
                     'bin/user/aqi/units.py',
                     'bin/user/aqi/us.py',
-                    'bin/user/aqi/ozone.py' ]),
-                ('bin',
-                    [ 'bin/aqi_backfill' ])
+                    'bin/user/aqi/ozone.py',
+                    'bin/user/aqi/backfill.py' ]),
             ]
         )

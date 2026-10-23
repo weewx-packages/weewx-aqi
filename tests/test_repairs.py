@@ -122,7 +122,7 @@ def test_new_epa_mode_rounds_half_up_while_legacy_stays_compatible():
 def test_backfill_reads_reordered_extended_schema_without_station_driver(tmp_path, monkeypatch):
     root = Path(__file__).parents[1]
     sys.path.insert(0, str(root/'bin'))
-    loader = importlib.machinery.SourceFileLoader('aqi_backfill', str(root/'bin/aqi_backfill'))
+    loader = importlib.machinery.SourceFileLoader('aqi_backfill', str(root/'bin/user/aqi/backfill.py'))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
@@ -143,6 +143,17 @@ def test_backfill_reads_reordered_extended_schema_without_station_driver(tmp_pat
     assert module.backfill(config,100,300) == 2
     assert received == [{'dateTime':100,'interval':5},{'dateTime':200,'interval':5}]
 
+
+
+def test_installer_writes_only_below_bin_user():
+    root = Path(__file__).parents[1]
+    loader = importlib.machinery.SourceFileLoader('aqi_install', str(root/'install.py'))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    files = module.loader()['files']
+    assert all(destination.startswith('bin/user') for destination, _ in files)
+    assert 'bin/user/aqi/backfill.py' in [source for _, sources in files for source in sources]
 
 def service_config(tmp_path, standard):
     config = configobj.ConfigObj({
