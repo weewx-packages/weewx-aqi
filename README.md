@@ -244,10 +244,10 @@ To plot a value, add an image to the `[ImageGenerator]` section of your
 
 ### Backfill existing readings
 
-The catalog package installs the backfill tool as the module
-`user.aqi.backfill`. Activate the Python environment that runs WeeWX and
-replace `/path/to/station/bin` with the directory that contains your installed
-`user` directory:
+The installer adds the backfill tool as the module `user.aqi.backfill`.
+Activate the Python environment that runs WeeWX and replace
+`/path/to/station/bin` with the directory that contains your installed `user`
+directory:
 
 ```sh
 PYTHONPATH=/path/to/station/bin python -m user.aqi.backfill --help
@@ -263,8 +263,6 @@ by name and uses the configured tables and bindings. It does not start the
 station driver. It writes with the configured standard to the configured
 `[[standard]] data_binding`, so check that binding first. Stop WeeWX and back
 up the AQI database before backfilling.
-
-In a source checkout, the same tool is `bin/aqi_backfill`.
 
 ## Limitations
 
