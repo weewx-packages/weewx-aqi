@@ -1,10 +1,15 @@
 # weewx-aqi
 Copyright 2018 - 2021 -- Jonathan Koren <jonathan@jonathankoren.com>
 
-## What is it?
+This independent continuation calculates AQI values from archived pollutant
+readings. The published catalog archive is `1.5.0.post20261022`, based on
+source release 1.5.0. It targets WeeWX 5.5.2–5.6 and Python 3.10–3.14 and adds
+a managed backfill module to the source release.
+
+## Supported indices
 `weewx-aqi` *is not* an air quality monitor. Instead, it calculates an air
 quality index from various pollutants. Air quality indices are single numbers
-that are meant to succinctly describe how safe the air is. `weeex-aqi` can
+that are meant to succinctly describe how safe the air is. `weewx-aqi` can
 calculate the following indices:
 
 * Australia's Air Quality Index
@@ -25,16 +30,45 @@ A source for air quality data, such as
 
 
 ## Installation
-1) run the installer (from the git directory):
 
-    weectl extension install .
+For a pip installation, activate the existing virtual environment that runs
+your WeeWX service before running these commands. Both `python` and `weectl`
+must come from that environment. For a distribution package installation, use
+its `weectl`, with `sudo` if required. Add `--config /path/to/weewx.conf` to the
+extension command when your station configuration is not found automatically.
 
-2) restart weewx:
+For Debian or Raspberry Pi OS package installations, use
+`sudo apt install python3-numpy` when selecting `NowCast2019`. Its version must
+satisfy `numpy>=2.2,<3`. If your distribution does not supply that version, use
+a WeeWX virtual environment. The pip command below is for that environment.
 
-    sudo /etc/init.d/weewx stop
-    sudo /etc/init.d/weewx start
+Use a NumPy wheel matching your Python and platform. A NumPy source build
+requires C/C++ compilers, Python headers, BLAS/LAPACK development libraries and
+`pkg-config`;
+see the [NumPy build prerequisites](https://numpy.org/doc/stable/building/).
 
-This will install the extension into the weewx/user/ directory.  
+Use an existing pollutant data source and its archive binding. Install NumPy
+in the WeeWX environment if you select the `NowCast2019` ozone model:
+
+```sh
+python -m pip install 'numpy>=2.2,<3'
+```
+
+Install the published archive with WeeWX 5's extension installer:
+
+```sh
+weectl extension install https://github.com/weewx-packages/catalog/releases/download/aqi/v1.5.0.post20261022/aqi-1.5.0.post20261022.tar.gz
+```
+
+Restart your WeeWX service after configuration, for example
+`sudo systemctl restart weewx` on systemd. The installer does not restart it
+for you.
+
+The installer registers `user.aqi.service.AqiService` in `process_services`,
+installs the `user.aqi` package, and adds `aqi_binding` with its own `aqi.sdb`
+database. Configure the sensor mapping and standard before restarting.
+To remove the extension, use `weectl extension uninstall aqi` and restart.
+Back up configuration and AQI databases before an upgrade or backfill.
 
 By default, the install script configures `weewx-aqi` for use with
 `weewx-purpleair` and calculates a United States's NowCast AQI. If you are not
@@ -155,14 +189,32 @@ aqi_pb_category,
 ```
 
 ## Additional utilities
-`aqi_backfill` is a utility that allows you to backfill `aqi.sdb` according to
-the current `weewx.conf`.
 
+The catalog archive installs the backfill command as `user.aqi.backfill`.
+With WeeWX's Python environment active and `/path/to/station/bin` replaced by
+the parent of your installed `user` directory:
 
-## Development Testing
+```sh
+PYTHONPATH=/path/to/station/bin python -m user.aqi.backfill --help
+PYTHONPATH=/path/to/station/bin python -m user.aqi.backfill /path/to/weewx.conf --start_time 1767225600 --end_time 1769904000
 ```
+
+The range arguments are Unix timestamps in seconds. This example covers
+January 2026 in UTC. Check the destination binding and back up the database first. Stop WeeWX
+while backfilling. The source launcher `bin/aqi_backfill` is retained in the
+archive but is not installed as a top-level command.
+
+
+## Development testing
+
+Install the NumPy dependency from [Installation](#installation) before testing.
+With Git installed and that WeeWX virtual environment active, download the
+source into an empty working directory:
+
+```sh
+git clone --depth 1 https://github.com/weewx-packages/weewx-aqi.git
 cd weewx-aqi
-python3 -m unittest
+python -m unittest
 ```
 
 ## Independent continuation
@@ -172,7 +224,7 @@ from d5bf9c9f28e8da15e3a65c55bc623e56a42e3602. It retains the complete upstream
 history, copyright and GPLv3 license and is maintained separately.
 
 Version 1.5.0 is tested with WeeWX 5.5.2 on Python 3.10 and 3.14. Install with
-`weectl extension install weewx-aqi-1.5.0.zip`. The default PurpleAir mapping
+the catalog archive linked above. The default PurpleAir mapping
 and existing standard names remain available. The Python 2 compatibility
 package `six` is no longer required.
 
@@ -210,11 +262,8 @@ expected archive samples. Missing or rejected samples stay missing, and the
 weighted mean uses the actual hour positions. The calculation follows the
 [AirNow technical assistance document, section IV](https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf).
 
-For `NowCast2019`, install NumPy in the same environment as WeeWX:
-
-```sh
-python -m pip install numpy
-```
+For `NowCast2019`, install NumPy using the environment-specific instructions
+under [Installation](#installation).
 
 The ozone model uses a 336-hour history and the EPA decision tree, including
 surrogate, zero and missing-hour cases. Two extra hours allow it to reconstruct
@@ -264,7 +313,7 @@ and live data are outside these local fixture tests.
 
 ### Backfill an extended archive
 
-`aqi_backfill` now reads the archive's named timestamp/interval columns and uses
+The backfill tool reads the archive's named timestamp/interval columns and uses
 the configured table and bindings. It does not start the station driver. This
 avoids assigning extended or reordered columns using a fixed standard schema.
 It writes using the selected standard, so choose the destination binding before
